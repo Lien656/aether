@@ -72,6 +72,7 @@ public class MainActivity extends Activity {
     private boolean showingVoice;
     private boolean shuffleEnabled;
     private boolean repeatEnabled;
+    private String plainLyricsText = "";
 
     private TextView selectedSong;
     private TextView selectedCover;
@@ -89,6 +90,8 @@ public class MainActivity extends Activity {
     private LinearLayout playlistList;
     private FrameLayout shellRoot;
     private View playerSheet;
+    private View lyricsSheet;
+    private View miniPlayerView;
     private EditText playlistNameInput;
     private ImageView coverPreview;
     private ImageView miniCover;
@@ -107,6 +110,7 @@ public class MainActivity extends Activity {
     private EditText artistInput;
     private EditText albumInput;
     private EditText lyricsInput;
+    private EditText lyricsSheetInput;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -195,6 +199,7 @@ public class MainActivity extends Activity {
 
     private View buildUi() {
         FrameLayout shell = new FrameLayout(this);
+        shell.setBackgroundColor(Color.rgb(3, 2, 13));
         shellRoot = shell;
         shell.addView(new AetherBackgroundView(this), new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -285,15 +290,8 @@ public class MainActivity extends Activity {
         artistInput = input("Artist");
         albumInput = input("Album");
         playlistNameInput = input("Playlist / album name");
-        lyricsInput = input("LRC lyrics: [00:12.30] line");
-        lyricsInput.setMinLines(8);
-        lyricsInput.setGravity(Gravity.TOP | Gravity.START);
-        lyricsInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        lyricsInput.setOnFocusChangeListener((view, focused) -> {
-            if (!focused) {
-                refreshLrc();
-            }
-        });
+        lyricsInput = input("Lyrics");
+        lyricsInput.setVisibility(View.GONE);
         editor.addView(titleInput);
         editor.addView(space(9));
         editor.addView(artistInput);
@@ -302,7 +300,12 @@ public class MainActivity extends Activity {
         editor.addView(space(9));
         editor.addView(playlistNameInput);
         editor.addView(space(9));
-        editor.addView(lyricsInput);
+        TextView lyricsEditorButton = pill("Lyrics", false);
+        lyricsEditorButton.setOnClickListener(v -> openLyricsSheet());
+        editor.addView(lyricsEditorButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(54)
+        ));
         root.addView(editor);
 
         root.addView(space(14));
@@ -321,19 +324,12 @@ public class MainActivity extends Activity {
         LinearLayout actionRow = row();
         playButton = pill("Play", false);
         playButton.setOnClickListener(v -> togglePlay());
-        TextView syncButton = pill("Sync text", false);
-        syncButton.setOnClickListener(v -> refreshLrc());
-        TextView autoSyncButton = pill("Auto sync lyrics", true);
-        autoSyncButton.setOnClickListener(v -> autoSyncLyrics());
         actionRow.addView(playButton, weightParams());
         actionRow.addView(spaceW(10));
-        actionRow.addView(syncButton, weightParams());
+        TextView editLyricsButton = pill("Lyrics", true);
+        editLyricsButton.setOnClickListener(v -> openLyricsSheet());
+        actionRow.addView(editLyricsButton, weightParams());
         lyricPanel.addView(actionRow);
-        lyricPanel.addView(space(10));
-        lyricPanel.addView(autoSyncButton, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(54)
-        ));
         root.addView(lyricPanel);
 
         root.addView(space(14));
@@ -356,10 +352,17 @@ public class MainActivity extends Activity {
         root.addView(space(12));
         root.addView(note);
 
-        shell.addView(miniPlayer(), bottomParams());
+        miniPlayerView = miniPlayer();
+        shell.addView(miniPlayerView, bottomParams());
         playerSheet = playerSheet();
         playerSheet.setVisibility(View.GONE);
         shell.addView(playerSheet, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        lyricsSheet = lyricsSheet();
+        lyricsSheet.setVisibility(View.GONE);
+        shell.addView(lyricsSheet, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
@@ -553,6 +556,7 @@ public class MainActivity extends Activity {
         fullLyricNow = text("Lyrics will appear here", 27, Color.WHITE, true);
         fullLyricNow.setGravity(Gravity.CENTER);
         fullLyricNow.setShadowLayer(dp(10), 0, 0, Color.rgb(145, 63, 255));
+        fullLyricNow.setOnClickListener(v -> openLyricsSheet());
         fullLyricNext = text("", 18, Color.argb(118, 255, 255, 255), true);
         fullLyricNext.setGravity(Gravity.CENTER);
         lyricsGlass.addView(fullLyricPrev);
@@ -560,6 +564,8 @@ public class MainActivity extends Activity {
         lyricsGlass.addView(fullLyricNow);
         lyricsGlass.addView(space(8));
         lyricsGlass.addView(fullLyricNext);
+        lyricsGlass.setClickable(true);
+        lyricsGlass.setOnClickListener(v -> openLyricsSheet());
         content.addView(lyricsGlass, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dp(146)
@@ -607,9 +613,9 @@ public class MainActivity extends Activity {
         prev.setOnClickListener(v -> playPrevious());
         fullPlayButton.setOnClickListener(v -> togglePlay());
         next.setOnClickListener(v -> playNext());
-        controls.addView(prev, new LinearLayout.LayoutParams(dp(76), dp(76)));
-        controls.addView(fullPlayButton, new LinearLayout.LayoutParams(dp(92), dp(92)));
-        controls.addView(next, new LinearLayout.LayoutParams(dp(76), dp(76)));
+        controls.addView(prev, new LinearLayout.LayoutParams(dp(62), dp(62)));
+        controls.addView(fullPlayButton, new LinearLayout.LayoutParams(dp(74), dp(74)));
+        controls.addView(next, new LinearLayout.LayoutParams(dp(62), dp(62)));
         content.addView(controls);
         content.addView(space(22));
 
@@ -630,6 +636,57 @@ public class MainActivity extends Activity {
         modes.addView(shuffleButton, weightParams());
         content.addView(modes);
 
+        return overlay;
+    }
+
+    private View lyricsSheet() {
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(Color.argb(244, 3, 2, 10));
+        overlay.setClickable(true);
+
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20), dp(22), dp(20), dp(24));
+        overlay.addView(content, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
+        LinearLayout top = row();
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView close = text("×", 28, Color.WHITE, true);
+        close.setGravity(Gravity.CENTER);
+        close.setOnClickListener(v -> closeLyricsSheet());
+        TextView title = text("Lyrics", 22, Color.WHITE, true);
+        top.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        top.addView(close, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        content.addView(top);
+        content.addView(space(12));
+
+        TextView hint = subText("Paste plain lyrics here. AETHER can save them as-is or generate approximate timing.");
+        content.addView(hint);
+        content.addView(space(14));
+
+        lyricsSheetInput = input("Paste lyrics...");
+        lyricsSheetInput.setGravity(Gravity.TOP | Gravity.START);
+        lyricsSheetInput.setMinLines(14);
+        lyricsSheetInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        content.addView(lyricsSheetInput, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+        ));
+        content.addView(space(14));
+
+        LinearLayout actions = row();
+        TextView save = pill("Save", false);
+        save.setOnClickListener(v -> saveLyricsFromSheet(false));
+        TextView auto = pill("Save & auto sync", true);
+        auto.setOnClickListener(v -> saveLyricsFromSheet(true));
+        actions.addView(save, weightParams());
+        actions.addView(spaceW(10));
+        actions.addView(auto, weightParams());
+        content.addView(actions);
         return overlay;
     }
 
@@ -898,6 +955,9 @@ public class MainActivity extends Activity {
         if (playerSheet == null || playerSheet.getVisibility() == View.VISIBLE) {
             return;
         }
+        if (miniPlayerView != null) {
+            miniPlayerView.animate().alpha(0f).setDuration(120).withEndAction(() -> miniPlayerView.setVisibility(View.GONE)).start();
+        }
         playerSheet.setAlpha(0f);
         playerSheet.setTranslationY(dp(36));
         playerSheet.setVisibility(View.VISIBLE);
@@ -917,8 +977,68 @@ public class MainActivity extends Activity {
                 .alpha(0f)
                 .translationY(dp(36))
                 .setDuration(220)
-                .withEndAction(() -> playerSheet.setVisibility(View.GONE))
+                .withEndAction(() -> {
+                    playerSheet.setVisibility(View.GONE);
+                    if (miniPlayerView != null) {
+                        miniPlayerView.setAlpha(0f);
+                        miniPlayerView.setVisibility(View.VISIBLE);
+                        miniPlayerView.animate().alpha(1f).setDuration(160).start();
+                    }
+                })
                 .start();
+    }
+
+    private void openLyricsSheet() {
+        if (lyricsSheet == null || lyricsSheet.getVisibility() == View.VISIBLE) {
+            return;
+        }
+        if (lyricsSheetInput != null) {
+            lyricsSheetInput.setText(!plainLyricsText.trim().isEmpty()
+                    ? plainLyricsText
+                    : stripLrcTimestamps(lyricsInput.getText().toString()));
+        }
+        lyricsSheet.setAlpha(0f);
+        lyricsSheet.setTranslationY(dp(24));
+        lyricsSheet.setVisibility(View.VISIBLE);
+        lyricsSheet.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(220)
+                .setInterpolator(new DecelerateInterpolator())
+                .start();
+    }
+
+    private void closeLyricsSheet() {
+        if (lyricsSheet == null || lyricsSheet.getVisibility() != View.VISIBLE) {
+            return;
+        }
+        lyricsSheet.animate()
+                .alpha(0f)
+                .translationY(dp(24))
+                .setDuration(180)
+                .withEndAction(() -> lyricsSheet.setVisibility(View.GONE))
+                .start();
+    }
+
+    private void saveLyricsFromSheet(boolean autoSync) {
+        String raw = lyricsSheetInput == null ? "" : lyricsSheetInput.getText().toString().trim();
+        if (raw.isEmpty()) {
+            toast("Paste lyrics first.");
+            return;
+        }
+        plainLyricsText = raw;
+        lyricsInput.setText(raw);
+        if (autoSync) {
+            if (audioUri == null) {
+                toast("Choose a song first.");
+                return;
+            }
+            autoSyncLyrics();
+        } else {
+            refreshLrc();
+            toast("Lyrics saved.");
+        }
+        closeLyricsSheet();
     }
 
     private void playNext() {
@@ -1169,7 +1289,7 @@ public class MainActivity extends Activity {
             lyricNext.setText("Example: [00:12.30] lyric text");
             if (fullLyricNow != null) {
                 fullLyricPrev.setText("");
-                fullLyricNow.setText("Paste lyrics, then tap Auto sync");
+                fullLyricNow.setText("Tap Lyrics to paste text");
                 fullLyricNext.setText("");
             }
         } else {
@@ -1269,6 +1389,17 @@ public class MainActivity extends Activity {
         long seconds = totalSeconds % 60L;
         long hundredths = (ms % 1000L) / 10L;
         return String.format(Locale.US, "%02d:%02d.%02d", minutes, seconds, hundredths);
+    }
+
+    private String stripLrcTimestamps(String value) {
+        StringBuilder builder = new StringBuilder();
+        for (String line : value.split("\\R")) {
+            String cleaned = line.replaceAll("\\[\\d{1,2}:\\d{2}(?:\\.\\d{1,3})?]", "").trim();
+            if (!cleaned.isEmpty()) {
+                builder.append(cleaned).append("\n");
+            }
+        }
+        return builder.toString().trim();
     }
 
     private void showLyricIndex(int current) {
