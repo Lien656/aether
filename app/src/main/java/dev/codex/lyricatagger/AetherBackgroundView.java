@@ -40,16 +40,16 @@ final class AetherBackgroundView extends View {
         canvas.drawRect(0, 0, width, height, paint);
         paint.setShader(null);
 
-        drawGlow(canvas, width * (0.20f + 0.08f * wave(t, 0f)), height * 0.18f, width * 0.72f, Color.argb(110, 124, 58, 255));
-        drawGlow(canvas, width * (0.84f + 0.05f * wave(t, 0.4f)), height * 0.56f, width * 0.58f, Color.argb(90, 50, 125, 255));
-        drawGlow(canvas, width * 0.42f, height * (0.82f + 0.04f * wave(t, 0.7f)), width * 0.68f, Color.argb(70, 198, 70, 255));
+        drawGlow(canvas, width * (0.20f + 0.08f * wave(t, 0f)), height * 0.18f, width * 0.72f, Color.argb(72, 124, 58, 255));
+        drawGlow(canvas, width * (0.84f + 0.05f * wave(t, 0.4f)), height * 0.56f, width * 0.58f, Color.argb(56, 50, 125, 255));
+        drawGlow(canvas, width * 0.42f, height * (0.82f + 0.04f * wave(t, 0.7f)), width * 0.68f, Color.argb(42, 198, 70, 255));
 
         for (int layer = 0; layer < 3; layer++) {
             drawWave(canvas, width, height, t, layer);
         }
 
         paint.setShader(null);
-        paint.setColor(Color.argb(80, 255, 255, 255));
+        paint.setColor(Color.argb(42, 255, 255, 255));
         for (int i = 0; i < 34; i++) {
             float x = ((i * 73) % Math.max(width, 1)) + wave(t, i * 0.03f) * 10f;
             float y = ((i * 131) % Math.max(height, 1)) + wave(t, i * 0.07f) * 14f;

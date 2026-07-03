@@ -32,6 +32,7 @@ import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.Space;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -40,6 +41,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 
 public class MainActivity extends Activity {
     private static final int PICK_AUDIO = 1001;
@@ -51,6 +53,7 @@ public class MainActivity extends Activity {
         @Override
         public void run() {
             updateLyrics();
+            updateProgress();
             handler.postDelayed(this, 180);
         }
     };
@@ -64,8 +67,11 @@ public class MainActivity extends Activity {
     private final List<MediaTrack> musicTracks = new ArrayList<>();
     private final List<MediaTrack> voiceTracks = new ArrayList<>();
     private final List<MediaTrack> playlist = new ArrayList<>();
+    private final Random random = new Random();
     private ValueAnimator coverPulse;
     private boolean showingVoice;
+    private boolean shuffleEnabled;
+    private boolean repeatEnabled;
 
     private TextView selectedSong;
     private TextView selectedCover;
@@ -78,10 +84,22 @@ public class MainActivity extends Activity {
     private TextView libraryStatus;
     private LinearLayout trackList;
     private LinearLayout playlistList;
+    private FrameLayout shellRoot;
+    private View playerSheet;
     private EditText playlistNameInput;
     private ImageView coverPreview;
     private ImageView miniCover;
+    private ImageView fullCover;
     private TextView playButton;
+    private TextView miniPlayButton;
+    private TextView fullPlayButton;
+    private TextView shuffleButton;
+    private TextView repeatButton;
+    private TextView fullTitle;
+    private TextView fullArtist;
+    private TextView elapsedText;
+    private TextView durationText;
+    private SeekBar seekBar;
     private EditText titleInput;
     private EditText artistInput;
     private EditText albumInput;
@@ -146,6 +164,9 @@ public class MainActivity extends Activity {
             coverMime = getContentResolver().getType(uri);
             coverPreview.setImageURI(uri);
             miniCover.setImageURI(uri);
+            if (fullCover != null) {
+                fullCover.setImageURI(uri);
+            }
             selectedCover.setText("Cover loaded");
             try {
                 coverBytes = Id3Writer.readAll(this, coverUri);
@@ -171,6 +192,7 @@ public class MainActivity extends Activity {
 
     private View buildUi() {
         FrameLayout shell = new FrameLayout(this);
+        shellRoot = shell;
         shell.addView(new AetherBackgroundView(this), new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -325,6 +347,12 @@ public class MainActivity extends Activity {
         root.addView(note);
 
         shell.addView(miniPlayer(), bottomParams());
+        playerSheet = playerSheet();
+        playerSheet.setVisibility(View.GONE);
+        shell.addView(playerSheet, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
         animateEntrance(root);
         return shell;
     }
@@ -419,6 +447,8 @@ public class MainActivity extends Activity {
         mini.setOrientation(LinearLayout.HORIZONTAL);
         mini.setPadding(dp(14), dp(10), dp(14), dp(10));
         mini.setElevation(dp(18));
+        mini.setClickable(true);
+        mini.setOnClickListener(v -> openPlayerSheet());
 
         miniCover = new ImageView(this);
         miniCover.setBackground(gradientBg(16, Color.rgb(126, 50, 255), Color.rgb(25, 11, 45)));
@@ -435,13 +465,132 @@ public class MainActivity extends Activity {
         info.addView(miniArtist);
         mini.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        TextView prev = text("I<", 22, Color.WHITE, true);
-        TextView next = text(">|", 22, Color.WHITE, true);
+        TextView prev = text("‹", 28, Color.WHITE, true);
+        miniPlayButton = text("▶", 24, Color.WHITE, true);
+        TextView next = text("›", 28, Color.WHITE, true);
         prev.setGravity(Gravity.CENTER);
+        miniPlayButton.setGravity(Gravity.CENTER);
         next.setGravity(Gravity.CENTER);
+        prev.setOnClickListener(v -> playPrevious());
+        miniPlayButton.setOnClickListener(v -> togglePlay());
+        next.setOnClickListener(v -> playNext());
         mini.addView(prev, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        mini.addView(miniPlayButton, new LinearLayout.LayoutParams(dp(42), dp(42)));
         mini.addView(next, new LinearLayout.LayoutParams(dp(42), dp(42)));
         return mini;
+    }
+
+    private View playerSheet() {
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(Color.argb(238, 3, 2, 13));
+        overlay.setClickable(true);
+
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(22), dp(22), dp(22), dp(28));
+        overlay.addView(content, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
+        LinearLayout top = row();
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView close = text("⌄", 34, Color.WHITE, true);
+        close.setGravity(Gravity.CENTER);
+        close.setOnClickListener(v -> closePlayerSheet());
+        TextView title = text("Now playing", 16, Color.argb(210, 255, 255, 255), true);
+        title.setGravity(Gravity.CENTER);
+        top.addView(close, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        top.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        top.addView(spaceW(48));
+        content.addView(top);
+        content.addView(space(26));
+
+        fullCover = new ImageView(this);
+        fullCover.setBackground(gradientBg(32, Color.rgb(120, 40, 255), Color.rgb(18, 10, 38)));
+        fullCover.setClipToOutline(true);
+        fullCover.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        if (coverUri != null) {
+            fullCover.setImageURI(coverUri);
+        }
+        content.addView(fullCover, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(330)
+        ));
+        content.addView(space(26));
+
+        fullTitle = text("Untitled track", 28, Color.WHITE, true);
+        fullArtist = text("AETHER session", 18, Color.argb(170, 255, 255, 255), false);
+        content.addView(fullTitle);
+        content.addView(fullArtist);
+        content.addView(space(18));
+
+        seekBar = new SeekBar(this);
+        seekBar.setMax(1000);
+        seekBar.setProgress(0);
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser && player != null) {
+                    int duration = player.getDuration();
+                    if (duration > 0) {
+                        player.seekTo((int) (duration * (progress / 1000f)));
+                    }
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+        content.addView(seekBar);
+
+        LinearLayout times = row();
+        elapsedText = subText("0:00");
+        durationText = subText("--:--");
+        durationText.setGravity(Gravity.RIGHT);
+        times.addView(elapsedText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        times.addView(durationText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        content.addView(times);
+        content.addView(space(26));
+
+        LinearLayout controls = row();
+        controls.setGravity(Gravity.CENTER);
+        TextView prev = playerControl("‹");
+        fullPlayButton = playerControl("▶");
+        fullPlayButton.setTextSize(36);
+        TextView next = playerControl("›");
+        prev.setOnClickListener(v -> playPrevious());
+        fullPlayButton.setOnClickListener(v -> togglePlay());
+        next.setOnClickListener(v -> playNext());
+        controls.addView(prev, new LinearLayout.LayoutParams(dp(76), dp(76)));
+        controls.addView(fullPlayButton, new LinearLayout.LayoutParams(dp(92), dp(92)));
+        controls.addView(next, new LinearLayout.LayoutParams(dp(76), dp(76)));
+        content.addView(controls);
+        content.addView(space(22));
+
+        LinearLayout modes = row();
+        modes.setGravity(Gravity.CENTER);
+        repeatButton = pill("Repeat", false);
+        shuffleButton = pill("Shuffle", false);
+        repeatButton.setOnClickListener(v -> {
+            repeatEnabled = !repeatEnabled;
+            syncModeButtons();
+        });
+        shuffleButton.setOnClickListener(v -> {
+            shuffleEnabled = !shuffleEnabled;
+            syncModeButtons();
+        });
+        modes.addView(repeatButton, weightParams());
+        modes.addView(spaceW(12));
+        modes.addView(shuffleButton, weightParams());
+        content.addView(modes);
+
+        return overlay;
     }
 
     private FrameLayout.LayoutParams bottomParams() {
@@ -595,8 +744,7 @@ public class MainActivity extends Activity {
         artistInput.setText(track.artist);
         albumInput.setText(track.album);
         selectedSong.setText((track.voice ? "Voice selected: " : "Track selected: ") + track.title);
-        miniTitle.setText(track.title);
-        miniArtist.setText(track.artist);
+        syncNowPlaying(track.title, track.artist);
         resetPlayer();
         animatePop(selectedSong);
     }
@@ -703,6 +851,162 @@ public class MainActivity extends Activity {
         toast("Saved " + saved + " tracks as album: " + albumName);
     }
 
+    private void openPlayerSheet() {
+        syncNowPlaying(value(titleInput, "Untitled track"), value(artistInput, "AETHER session"));
+        syncPlayButtons();
+        syncModeButtons();
+        if (playerSheet == null || playerSheet.getVisibility() == View.VISIBLE) {
+            return;
+        }
+        playerSheet.setAlpha(0f);
+        playerSheet.setTranslationY(dp(36));
+        playerSheet.setVisibility(View.VISIBLE);
+        playerSheet.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(260)
+                .setInterpolator(new DecelerateInterpolator())
+                .start();
+    }
+
+    private void closePlayerSheet() {
+        if (playerSheet == null || playerSheet.getVisibility() != View.VISIBLE) {
+            return;
+        }
+        playerSheet.animate()
+                .alpha(0f)
+                .translationY(dp(36))
+                .setDuration(220)
+                .withEndAction(() -> playerSheet.setVisibility(View.GONE))
+                .start();
+    }
+
+    private void playNext() {
+        MediaTrack next = nextTrack(1);
+        if (next == null) {
+            stopCoverPulse();
+            syncPlayButtons();
+            return;
+        }
+        playTrack(next, true);
+    }
+
+    private void playPrevious() {
+        MediaTrack previous = nextTrack(-1);
+        if (previous != null) {
+            playTrack(previous, true);
+        }
+    }
+
+    private MediaTrack nextTrack(int direction) {
+        List<MediaTrack> queue = activeQueue();
+        if (queue.isEmpty()) {
+            return null;
+        }
+        if (shuffleEnabled && queue.size() > 1) {
+            MediaTrack current = findTrackByUri(audioUri);
+            MediaTrack candidate = current;
+            int guard = 0;
+            while (candidate == current && guard < 8) {
+                candidate = queue.get(random.nextInt(queue.size()));
+                guard++;
+            }
+            return candidate;
+        }
+        int index = 0;
+        for (int i = 0; i < queue.size(); i++) {
+            if (queue.get(i).uri.equals(audioUri)) {
+                index = i;
+                break;
+            }
+        }
+        int next = (index + direction) % queue.size();
+        if (next < 0) {
+            next = queue.size() - 1;
+        }
+        return queue.get(next);
+    }
+
+    private List<MediaTrack> activeQueue() {
+        if (!playlist.isEmpty()) {
+            return playlist;
+        }
+        return showingVoice ? voiceTracks : musicTracks;
+    }
+
+    private void playTrack(MediaTrack track, boolean autoStart) {
+        audioUri = track.uri;
+        titleInput.setText(track.title);
+        artistInput.setText(track.artist);
+        albumInput.setText(track.album);
+        selectedSong.setText((track.voice ? "Voice selected: " : "Track selected: ") + track.title);
+        if (player != null) {
+            player.release();
+            player = null;
+        }
+        syncNowPlaying(track.title, track.artist);
+        if (autoStart) {
+            togglePlay();
+        } else {
+            syncPlayButtons();
+        }
+    }
+
+    private void syncNowPlaying(String title, String artist) {
+        if (miniTitle != null) {
+            miniTitle.setText(title);
+        }
+        if (miniArtist != null) {
+            miniArtist.setText(artist);
+        }
+        if (fullTitle != null) {
+            fullTitle.setText(title);
+        }
+        if (fullArtist != null) {
+            fullArtist.setText(artist);
+        }
+    }
+
+    private void syncPlayButtons() {
+        boolean playing = player != null && player.isPlaying();
+        String compact = playing ? "⏸" : "▶";
+        if (playButton != null) {
+            playButton.setText(playing ? "Pause" : "Play");
+        }
+        if (miniPlayButton != null) {
+            miniPlayButton.setText(compact);
+        }
+        if (fullPlayButton != null) {
+            fullPlayButton.setText(compact);
+        }
+    }
+
+    private void syncModeButtons() {
+        if (shuffleButton != null) {
+            shuffleButton.setBackground(shuffleEnabled
+                    ? gradientBg(28, Color.rgb(184, 62, 255), Color.rgb(86, 76, 255))
+                    : new GlassDrawable(28, getResources().getDisplayMetrics().density));
+        }
+        if (repeatButton != null) {
+            repeatButton.setBackground(repeatEnabled
+                    ? gradientBg(28, Color.rgb(184, 62, 255), Color.rgb(86, 76, 255))
+                    : new GlassDrawable(28, getResources().getDisplayMetrics().density));
+        }
+    }
+
+    private void updateProgress() {
+        if (player == null || seekBar == null) {
+            return;
+        }
+        int duration = player.getDuration();
+        int position = player.getCurrentPosition();
+        if (duration > 0) {
+            seekBar.setProgress((int) (1000f * position / duration));
+            durationText.setText(formatDuration(duration));
+            elapsedText.setText(formatDuration(position));
+        }
+    }
+
     private void pick(String mime, int requestCode) {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -724,20 +1028,24 @@ public class MainActivity extends Activity {
                     return;
                 }
                 player.setOnCompletionListener(mp -> {
-                    playButton.setText("Play");
-                    stopCoverPulse();
+                    if (repeatEnabled) {
+                        mp.seekTo(0);
+                        mp.start();
+                    } else {
+                        playNext();
+                    }
+                    syncPlayButtons();
                 });
             }
             if (player.isPlaying()) {
                 player.pause();
-                playButton.setText("Play");
                 stopCoverPulse();
             } else {
                 refreshLrc();
                 player.start();
-                playButton.setText("Pause");
                 startCoverPulse();
             }
+            syncPlayButtons();
         } catch (Exception error) {
             toast("Playback failed: " + error.getMessage());
         }
@@ -832,7 +1140,7 @@ public class MainActivity extends Activity {
             player.release();
             player = null;
         }
-        playButton.setText("Play");
+        syncPlayButtons();
         stopCoverPulse();
     }
 
@@ -926,6 +1234,16 @@ public class MainActivity extends Activity {
         view.setMinHeight(dp(42));
         view.setBackground(new GlassDrawable(28, getResources().getDisplayMetrics().density));
         view.setClipToOutline(true);
+        return view;
+    }
+
+    private TextView playerControl(String label) {
+        TextView view = text(label, 30, Color.WHITE, true);
+        view.setGravity(Gravity.CENTER);
+        view.setBackground(new GlassDrawable(40, getResources().getDisplayMetrics().density));
+        view.setClipToOutline(true);
+        view.setClickable(true);
+        view.setFocusable(true);
         return view;
     }
 
