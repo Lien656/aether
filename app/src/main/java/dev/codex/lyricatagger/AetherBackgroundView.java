@@ -30,9 +30,9 @@ final class AetherBackgroundView extends View {
                 0, 0, width, height,
                 new int[]{
                         Color.rgb(3, 2, 13),
-                        Color.rgb(12, 5, 31),
-                        Color.rgb(20, 12, 42),
-                        Color.rgb(4, 3, 15)
+                        Color.rgb(7, 4, 19),
+                        Color.rgb(11, 7, 26),
+                        Color.rgb(2, 2, 9)
                 },
                 new float[]{0f, 0.34f, 0.68f, 1f},
                 Shader.TileMode.CLAMP
@@ -40,16 +40,16 @@ final class AetherBackgroundView extends View {
         canvas.drawRect(0, 0, width, height, paint);
         paint.setShader(null);
 
-        drawGlow(canvas, width * (0.20f + 0.08f * wave(t, 0f)), height * 0.18f, width * 0.72f, Color.argb(72, 124, 58, 255));
-        drawGlow(canvas, width * (0.84f + 0.05f * wave(t, 0.4f)), height * 0.56f, width * 0.58f, Color.argb(56, 50, 125, 255));
-        drawGlow(canvas, width * 0.42f, height * (0.82f + 0.04f * wave(t, 0.7f)), width * 0.68f, Color.argb(42, 198, 70, 255));
+        drawGlow(canvas, width * (0.20f + 0.08f * wave(t, 0f)), height * 0.18f, width * 0.72f, Color.argb(42, 124, 58, 255));
+        drawGlow(canvas, width * (0.84f + 0.05f * wave(t, 0.4f)), height * 0.56f, width * 0.58f, Color.argb(34, 50, 125, 255));
+        drawGlow(canvas, width * 0.42f, height * (0.82f + 0.04f * wave(t, 0.7f)), width * 0.68f, Color.argb(24, 198, 70, 255));
 
         for (int layer = 0; layer < 3; layer++) {
             drawWave(canvas, width, height, t, layer);
         }
 
         paint.setShader(null);
-        paint.setColor(Color.argb(42, 255, 255, 255));
+        paint.setColor(Color.argb(28, 255, 255, 255));
         for (int i = 0; i < 34; i++) {
             float x = ((i * 73) % Math.max(width, 1)) + wave(t, i * 0.03f) * 10f;
             float y = ((i * 131) % Math.max(height, 1)) + wave(t, i * 0.07f) * 14f;
@@ -83,7 +83,7 @@ final class AetherBackgroundView extends View {
         }
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(1.8f + layer);
-        paint.setColor(Color.argb(72 - layer * 12, 181, 76, 255));
+        paint.setColor(Color.argb(42 - layer * 8, 181, 76, 255));
         canvas.drawPath(path, paint);
         paint.setStyle(Paint.Style.FILL);
     }

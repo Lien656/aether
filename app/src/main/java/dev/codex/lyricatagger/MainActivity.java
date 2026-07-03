@@ -201,7 +201,7 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setClipToPadding(false);
-        scroll.setPadding(0, 0, 0, dp(112));
+        scroll.setPadding(0, 0, 0, dp(136));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -445,7 +445,7 @@ public class MainActivity extends Activity {
         LinearLayout mini = glassPanel(36);
         mini.setGravity(Gravity.CENTER_VERTICAL);
         mini.setOrientation(LinearLayout.HORIZONTAL);
-        mini.setPadding(dp(14), dp(10), dp(14), dp(10));
+        mini.setPadding(dp(14), dp(12), dp(14), dp(12));
         mini.setElevation(dp(18));
         mini.setClickable(true);
         mini.setOnClickListener(v -> openPlayerSheet());
@@ -454,13 +454,15 @@ public class MainActivity extends Activity {
         miniCover.setBackground(gradientBg(16, Color.rgb(126, 50, 255), Color.rgb(25, 11, 45)));
         miniCover.setClipToOutline(true);
         miniCover.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        mini.addView(miniCover, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        mini.addView(miniCover, new LinearLayout.LayoutParams(dp(54), dp(54)));
         mini.addView(spaceW(12));
 
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
         miniTitle = text("Untitled track", 16, Color.WHITE, true);
         miniArtist = text("AETHER session", 12, Color.argb(170, 255, 255, 255), false);
+        miniTitle.setSingleLine(true);
+        miniArtist.setSingleLine(true);
         info.addView(miniTitle);
         info.addView(miniArtist);
         mini.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -471,6 +473,8 @@ public class MainActivity extends Activity {
         prev.setGravity(Gravity.CENTER);
         miniPlayButton.setGravity(Gravity.CENTER);
         next.setGravity(Gravity.CENTER);
+        miniPlayButton.setBackground(primaryControlBg(22));
+        miniPlayButton.setClipToOutline(true);
         prev.setOnClickListener(v -> playPrevious());
         miniPlayButton.setOnClickListener(v -> togglePlay());
         next.setOnClickListener(v -> playNext());
@@ -482,12 +486,17 @@ public class MainActivity extends Activity {
 
     private View playerSheet() {
         FrameLayout overlay = new FrameLayout(this);
-        overlay.setBackgroundColor(Color.argb(238, 3, 2, 13));
+        overlay.setBackgroundColor(Color.rgb(3, 2, 10));
         overlay.setClickable(true);
+        overlay.addView(new AetherBackgroundView(this), new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
 
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(22), dp(22), dp(22), dp(28));
+        content.setPadding(dp(22), dp(18), dp(22), dp(26));
+        content.setBackgroundColor(Color.argb(172, 3, 2, 10));
         overlay.addView(content, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -515,12 +524,14 @@ public class MainActivity extends Activity {
         }
         content.addView(fullCover, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(330)
+                dp(300)
         ));
         content.addView(space(26));
 
         fullTitle = text("Untitled track", 28, Color.WHITE, true);
         fullArtist = text("AETHER session", 18, Color.argb(170, 255, 255, 255), false);
+        fullTitle.setSingleLine(true);
+        fullArtist.setSingleLine(true);
         content.addView(fullTitle);
         content.addView(fullArtist);
         content.addView(space(18));
@@ -561,8 +572,7 @@ public class MainActivity extends Activity {
         LinearLayout controls = row();
         controls.setGravity(Gravity.CENTER);
         TextView prev = playerControl("‹");
-        fullPlayButton = playerControl("▶");
-        fullPlayButton.setTextSize(36);
+        fullPlayButton = primaryPlayerControl("▶");
         TextView next = playerControl("›");
         prev.setOnClickListener(v -> playPrevious());
         fullPlayButton.setOnClickListener(v -> togglePlay());
@@ -596,10 +606,10 @@ public class MainActivity extends Activity {
     private FrameLayout.LayoutParams bottomParams() {
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(86),
+                dp(100),
                 Gravity.BOTTOM
         );
-        params.setMargins(dp(14), 0, dp(14), dp(14));
+        params.setMargins(dp(16), 0, dp(16), dp(16));
         return params;
     }
 
@@ -969,7 +979,7 @@ public class MainActivity extends Activity {
 
     private void syncPlayButtons() {
         boolean playing = player != null && player.isPlaying();
-        String compact = playing ? "⏸" : "▶";
+        String compact = playing ? "Ⅱ" : "▶";
         if (playButton != null) {
             playButton.setText(playing ? "Pause" : "Play");
         }
@@ -1247,6 +1257,17 @@ public class MainActivity extends Activity {
         return view;
     }
 
+    private TextView primaryPlayerControl(String label) {
+        TextView view = text(label, 36, Color.WHITE, true);
+        view.setGravity(Gravity.CENTER);
+        view.setBackground(primaryControlBg(46));
+        view.setShadowLayer(dp(12), 0, 0, Color.rgb(174, 67, 255));
+        view.setClipToOutline(true);
+        view.setClickable(true);
+        view.setFocusable(true);
+        return view;
+    }
+
     private TextView sectionTitle(String label) {
         TextView view = text(label, 18, Color.WHITE, true);
         view.setPadding(0, 0, 0, dp(10));
@@ -1273,7 +1294,21 @@ public class MainActivity extends Activity {
     private GradientDrawable gradientBg(float radiusDp, int start, int end) {
         GradientDrawable drawable = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{start, end});
         drawable.setCornerRadius(dp(Math.round(radiusDp)));
-        drawable.setStroke(dp(1), Color.argb(96, 255, 255, 255));
+        drawable.setStroke(dp(1), Color.argb(64, 255, 255, 255));
+        return drawable;
+    }
+
+    private GradientDrawable primaryControlBg(float radiusDp) {
+        GradientDrawable drawable = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{
+                        Color.rgb(218, 71, 255),
+                        Color.rgb(120, 70, 255),
+                        Color.rgb(36, 20, 92)
+                }
+        );
+        drawable.setCornerRadius(dp(Math.round(radiusDp)));
+        drawable.setStroke(dp(1), Color.argb(118, 255, 255, 255));
         return drawable;
     }
 
