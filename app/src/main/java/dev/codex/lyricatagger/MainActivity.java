@@ -77,6 +77,9 @@ public class MainActivity extends Activity {
     private TextView selectedCover;
     private TextView lyricNow;
     private TextView lyricNext;
+    private TextView fullLyricPrev;
+    private TextView fullLyricNow;
+    private TextView fullLyricNext;
     private TextView miniTitle;
     private TextView miniArtist;
     private TextView musicTab;
@@ -320,10 +323,17 @@ public class MainActivity extends Activity {
         playButton.setOnClickListener(v -> togglePlay());
         TextView syncButton = pill("Sync text", false);
         syncButton.setOnClickListener(v -> refreshLrc());
+        TextView autoSyncButton = pill("Auto sync lyrics", true);
+        autoSyncButton.setOnClickListener(v -> autoSyncLyrics());
         actionRow.addView(playButton, weightParams());
         actionRow.addView(spaceW(10));
         actionRow.addView(syncButton, weightParams());
         lyricPanel.addView(actionRow);
+        lyricPanel.addView(space(10));
+        lyricPanel.addView(autoSyncButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(54)
+        ));
         root.addView(lyricPanel);
 
         root.addView(space(14));
@@ -534,7 +544,27 @@ public class MainActivity extends Activity {
         fullArtist.setSingleLine(true);
         content.addView(fullTitle);
         content.addView(fullArtist);
-        content.addView(space(18));
+        content.addView(space(16));
+
+        LinearLayout lyricsGlass = glassPanel(28);
+        lyricsGlass.setGravity(Gravity.CENTER);
+        fullLyricPrev = text("", 18, Color.argb(92, 255, 255, 255), true);
+        fullLyricPrev.setGravity(Gravity.CENTER);
+        fullLyricNow = text("Lyrics will appear here", 27, Color.WHITE, true);
+        fullLyricNow.setGravity(Gravity.CENTER);
+        fullLyricNow.setShadowLayer(dp(10), 0, 0, Color.rgb(145, 63, 255));
+        fullLyricNext = text("", 18, Color.argb(118, 255, 255, 255), true);
+        fullLyricNext.setGravity(Gravity.CENTER);
+        lyricsGlass.addView(fullLyricPrev);
+        lyricsGlass.addView(space(8));
+        lyricsGlass.addView(fullLyricNow);
+        lyricsGlass.addView(space(8));
+        lyricsGlass.addView(fullLyricNext);
+        content.addView(lyricsGlass, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(146)
+        ));
+        content.addView(space(14));
 
         seekBar = new SeekBar(this);
         seekBar.setMax(1000);
@@ -1128,8 +1158,7 @@ public class MainActivity extends Activity {
             }
         }
         if (current >= 0) {
-            lyricNow.setText(lrcLines.get(current).text);
-            lyricNext.setText(current + 1 < lrcLines.size() ? lrcLines.get(current + 1).text : "");
+            showLyricIndex(current);
         }
     }
 
@@ -1138,11 +1167,121 @@ public class MainActivity extends Activity {
         if (lrcLines.isEmpty()) {
             lyricNow.setText("No synced lines yet");
             lyricNext.setText("Example: [00:12.30] lyric text");
+            if (fullLyricNow != null) {
+                fullLyricPrev.setText("");
+                fullLyricNow.setText("Paste lyrics, then tap Auto sync");
+                fullLyricNext.setText("");
+            }
         } else {
-            lyricNow.setText(lrcLines.get(0).text);
-            lyricNext.setText(lrcLines.size() > 1 ? lrcLines.get(1).text : "");
+            showLyricIndex(0);
         }
         animatePop(lyricNow);
+    }
+
+    private void autoSyncLyrics() {
+        if (audioUri == null) {
+            toast("Choose a song first.");
+            return;
+        }
+        String raw = lyricsInput.getText().toString();
+        if (raw.trim().isEmpty()) {
+            toast("Paste lyrics first.");
+            return;
+        }
+        if (!LrcParser.parse(raw).isEmpty()) {
+            refreshLrc();
+            toast("Lyrics already have timestamps.");
+            return;
+        }
+        long duration = currentTrackDuration();
+        if (duration <= 0) {
+            toast("Cannot read track duration yet.");
+            return;
+        }
+        String synced = buildWeightedLrc(raw, duration);
+        if (synced.isEmpty()) {
+            toast("No lyric lines found.");
+            return;
+        }
+        lyricsInput.setText(synced);
+        refreshLrc();
+        toast("Auto-synced lyrics. It is approximate, not vocal AI.");
+    }
+
+    private long currentTrackDuration() {
+        if (player != null && player.getDuration() > 0) {
+            return player.getDuration();
+        }
+        try {
+            MediaPlayer probe = MediaPlayer.create(this, audioUri);
+            if (probe == null) {
+                return 0;
+            }
+            int duration = probe.getDuration();
+            probe.release();
+            return duration;
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
+    private String buildWeightedLrc(String raw, long durationMs) {
+        List<String> lines = new ArrayList<>();
+        for (String line : raw.split("\\R")) {
+            String cleaned = line.trim();
+            if (!cleaned.isEmpty()) {
+                lines.add(cleaned);
+            }
+        }
+        if (lines.isEmpty()) {
+            return "";
+        }
+
+        long usable = Math.max(10_000L, durationMs - 6_000L);
+        long start = 1_000L;
+        int totalWeight = 0;
+        List<Integer> weights = new ArrayList<>();
+        for (String line : lines) {
+            int words = line.split("\\s+").length;
+            int chars = line.replace(" ", "").length();
+            int weight = Math.max(2, words * 3 + chars / 4);
+            weights.add(weight);
+            totalWeight += weight;
+        }
+
+        StringBuilder builder = new StringBuilder();
+        long cursor = start;
+        for (int i = 0; i < lines.size(); i++) {
+            builder.append("[")
+                    .append(formatLrcTime(cursor))
+                    .append("] ")
+                    .append(lines.get(i))
+                    .append("\n");
+            long slice = Math.max(1_250L, usable * weights.get(i) / Math.max(1, totalWeight));
+            cursor += slice;
+        }
+        return builder.toString().trim();
+    }
+
+    private String formatLrcTime(long ms) {
+        long totalSeconds = ms / 1000L;
+        long minutes = totalSeconds / 60L;
+        long seconds = totalSeconds % 60L;
+        long hundredths = (ms % 1000L) / 10L;
+        return String.format(Locale.US, "%02d:%02d.%02d", minutes, seconds, hundredths);
+    }
+
+    private void showLyricIndex(int current) {
+        String previous = current > 0 ? lrcLines.get(current - 1).text : "";
+        String now = lrcLines.get(current).text;
+        String next = current + 1 < lrcLines.size() ? lrcLines.get(current + 1).text : "";
+        lyricNow.setText(now);
+        lyricNext.setText(next);
+        if (fullLyricNow != null) {
+            fullLyricPrev.setText(previous);
+            fullLyricNow.setText(now);
+            fullLyricNext.setText(next);
+        }
     }
 
     private void resetPlayer() {
